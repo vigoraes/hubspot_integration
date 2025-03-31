@@ -1,35 +1,56 @@
 package vigoraes.hubspot_integration.controllers;
 
+import java.io.IOException;
+
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 
 import vigoraes.hubspot_integration.Dtos.AuthDto;
+import vigoraes.hubspot_integration.services.AuthService;
+import vigoraes.hubspot_integration.utils.CacheUtils;
 
 
 @RestController
-@RequestMapping("/authcontroller")
+@RequestMapping("/auth")
 public class AuthController {
 
-    @PostMapping
-    public ResponseEntity<String> createUser(@Valid @RequestBody AuthDto AuthDTO) {
-        return new ResponseEntity<>("Usuário criado com sucesso!", HttpStatus.CREATED);
+    private final AuthService authService;
+
+    AuthController(AuthService authService) {
+        this.authService = authService;
     }
-    
-    @PostMapping("/login")
-    public String login(@Valid @RequestBody AuthDto authDTO) {
+
+
+    @GetMapping("/initialize-oauth")
+    public  ResponseEntity<String> initializeOauth(HttpServletResponse res) throws IOException{
+        return authService.initializeOauth(res);
+    }
+
+    @GetMapping("/callback")
+    public ResponseEntity<String> handleOAuthCallback(@RequestParam("code") String code) {
+
+        CacheUtils.cacheOAuthCode(code);
         
-        return "Login criado com sucesso: " + authDTO.getUsername();
-    }
-
-    @PostMapping("/create-contact")
-    public String createContact(@Valid @RequestBody AuthDto authDTO) {
-
-        return "Contato criado com sucesso.";
+        return ResponseEntity.ok("Código recebido: " + code);
     }
     
+
+    @PostMapping("create-user")
+    public ResponseEntity<String> createUser(@Valid @RequestBody AuthDto authDto) {
+        return authService.createUser(authDto);
+    }
+    
+    @PostMapping("/get-tokens")
+    public ResponseEntity<String> getAccessTokenAndRefreshToken(@Valid @RequestBody AuthDto authDto) {
+        
+        return authService.getAccessTokenAndRefreshToken(authDto);
+    }
+
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<String> handleValidationExceptions(ConstraintViolationException ex) {
