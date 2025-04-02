@@ -3,37 +3,31 @@ package vigoraes.hubspot_integration.utils;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Component;
 
+import vigoraes.hubspot_integration.Dtos.TokensDto;
+
+@Component
 public class CacheUtils {
 
     @CachePut(value = "oauthCache", key = "'oauthCode'")
-    public static String cacheOAuthCode(String code) {
+    public String cacheOAuthCode(String code) {
         return code;
     }
 
     @Cacheable(value = "oauthCache", key = "'oauthCode'")
-    public static String getCachedOAuthCode() {
+    public String getCachedOAuthCode() {
         return null; // Retorna null se não houver código no cache
     }
     
-    @CachePut(value = "authCache", key = "'accessToken'")
-    public static String cacheAccessToken(String accessToken) {
-        return accessToken;
+    @CachePut(value = "authCache", key = "'tokens'")
+    public TokensDto cacheTokens(TokensDto tokens) {
+        return tokens;
     }
 
-    @Cacheable(value = "authCache", key = "'accessToken'")
-    public static String getCachedAccessToken() {
+    @Cacheable(value = "authCache", key = "'tokens'")
+    public TokensDto getCachedTokens() {
         return null; // Se não houver cache, retorna null
-    }
-
-    @CachePut(value = "authCache", key = "'refreshToken'")
-    public static String cacheRefreshToken(String refreshToken) {
-        return refreshToken;
-    }
-
-    @Cacheable(value = "authCache", key = "'refreshToken'")
-    public static String getCachedRefreshToken() {
-        return null;
     }
 
     @CacheEvict(value = "authCache", allEntries = true)

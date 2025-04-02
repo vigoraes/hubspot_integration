@@ -1,15 +1,21 @@
 package vigoraes.hubspot_integration.services;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
 import reactor.core.publisher.Mono;
 import vigoraes.hubspot_integration.Dtos.AuthDto;
+import vigoraes.hubspot_integration.Dtos.TokensDto;
+import vigoraes.hubspot_integration.utils.CacheUtils;
 
 import java.io.IOException;
 
@@ -19,16 +25,33 @@ import javax.transaction.Transactional;
 @Transactional
 public class AuthService {
 
-    private final WebClient webClient = WebClient.create("https://api.hubapi.com/");
+    private final WebClient webClient = WebClient.create("https://api.hubapi.com");
 
     @Value("${hubspot.client_id}")
     private String clientId; 
 
-    private String uri = UriComponentsBuilder.fromUriString("https://app.hubspot.com/oauth/authorize")
-                                            .queryParam("client_id", clientId)
-                                            .queryParam("redirect_uri", "http://localhost:3333/auth/callback")
-                                            .queryParam("scope", "oauth")
-                                            .toUriString();
+    @Value("${hubspot.client_secret}")
+    private String clientSecret;
+
+    private String uri;
+
+    @Autowired
+    private CacheUtils cacheUtils;
+
+    private String redirectUri = "http://localhost:3333/auth/login"; 
+
+    AuthService(CacheUtils cacheUtils){
+        cacheUtils = this.cacheUtils;
+    }
+
+    @PostConstruct
+    public void init() {
+        this.uri = UriComponentsBuilder.fromUriString("https://app.hubspot.com/oauth/authorize")
+                                    .queryParam("client_id", clientId)
+                                    .queryParam("redirect_uri", redirectUri)
+                                    .queryParam("scope", "oauth")
+                                    .toUriString();
+    }
 
     public ResponseEntity<String> initializeOauth(HttpServletResponse res) throws IOException{
 
@@ -37,17 +60,29 @@ public class AuthService {
         return new ResponseEntity<>("Redirecionado para OAuth 2.0", HttpStatus.OK);
     }
 
-    public ResponseEntity<String> getAccessTokenAndRefreshToken(AuthDto authDto){
+    public void getAccessTokenAndRefreshToken(String oauthCode){
 
-        Mono<String> body = WebClient.builder()
-                .baseUrl("https://app.hubspot.com/")
-                .build()
-                .get()
-                .uri("/oauth/authorize?client_id=" + this.clientId + "&scope=contacts%20automation&redirect_uri=https://www.example.com/")
-                .retrieve()
-                .bodyToMono(String.class);
-       
-        return new ResponseEntity<>("Login efetuado com sucesso: " + authDto.getUsername(), HttpStatus.OK);
+        this.cacheUtils.cacheOAuthCode(oauthCode);
+
+        MultiValueMap<String, String> payloadBody = new LinkedMultiValueMap<>();
+
+        payloadBody.add("grant_type", "authorization_code");
+        payloadBody.add("client_id", clientId);
+        payloadBody.add("client_secret", clientSecret);
+        payloadBody.add("redirect_uri", redirectUri);
+        payloadBody.add("code", oauthCode);
+        
+        Mono<TokensDto> responseBody = webClient.post()
+                                .uri("/oauth/v1/token")
+                                .bodyValue(payloadBody)
+                                .retrieve()
+                                .bodyToMono(TokensDto.class);
+
+        TokensDto tokens = responseBody.block();
+
+        this.cacheUtils.cacheTokens(tokens);
+        
+        // return new ResponseEntity<>("Tokens resgatados com sucesso.", HttpStatus.OK);
     }
 
     public ResponseEntity<String> createUser(AuthDto authDto){
